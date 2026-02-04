@@ -370,14 +370,14 @@ export default function TradePage() {
   const candlesLoading = historyLoading && candles.length === 0 && !historyError;
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex min-w-0 flex-col gap-8">
       <TopNav title="Trading" />
-      <div className="grid gap-6 lg:grid-cols-[1.3fr_0.7fr]">
-        <Card className="flex flex-col gap-4">
+      <div className="grid min-w-0 gap-6 lg:grid-cols-[1.3fr_0.7fr]">
+        <Card className="flex min-w-0 flex-col gap-4">
           <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
+            <div className="flex max-w-full flex-wrap items-center gap-3">
               <select
-                className="rounded-full border border-[var(--border)] bg-[var(--panel)] px-4 py-2 text-sm"
+                className="max-w-full rounded-full border border-[var(--border)] bg-[var(--panel)] px-4 py-2 text-sm"
                 value={symbol}
                 onChange={(event) => setSymbol(event.target.value)}
               >
@@ -388,7 +388,7 @@ export default function TradePage() {
                 ))}
               </select>
               <select
-                className="rounded-full border border-[var(--border)] bg-[var(--panel)] px-4 py-2 text-sm"
+                className="max-w-full rounded-full border border-[var(--border)] bg-[var(--panel)] px-4 py-2 text-sm"
                 value={interval}
                 onChange={(event) => setInterval(event.target.value)}
               >
@@ -455,7 +455,7 @@ export default function TradePage() {
           />
         </Card>
 
-        <Card className="flex flex-col gap-4">
+        <Card className="flex min-w-0 flex-col gap-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h3 className="text-lg font-semibold">Place order</h3>
             <Badge tone="neutral">Order ticket</Badge>
@@ -468,7 +468,7 @@ export default function TradePage() {
 
       <Card>
         <h3 className="mb-4 text-lg font-semibold">Open Positions</h3>
-        <div className="overflow-x-auto">
+        <div className="max-w-full overflow-x-auto">
           <table className="min-w-[720px] w-full text-left text-sm">
             <thead>
               <tr className="border-b border-[var(--border)] text-[var(--muted)]">

@@ -158,7 +158,8 @@ export default function PriceChart({
   onStopCommit?: (type: "sl" | "tp", price: number) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [overlayTarget, setOverlayTarget] = useState<HTMLDivElement | null>(null);
+  const overlayRef = useRef<HTMLDivElement | null>(null);
+  const scrollRestoreRef = useRef<{ htmlOverflow: string; bodyOverflow: string; bodyPaddingRight: string } | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const smaSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
@@ -480,31 +481,39 @@ export default function PriceChart({
   };
 
   useEffect(() => {
-    // Manage body scroll in pseudo-fullscreen mode
-    if (isFullscreen) {
-      document.documentElement.style.overflow = "hidden";
-      document.body.style.overflow = "hidden";
-      // Create overlay root if missing
-      if (!overlayTarget) {
-        const root = document.createElement("div");
-        root.id = "tv-fullscreen-overlay-root";
-        root.style.position = "fixed";
-        root.style.inset = "0";
-        root.style.width = "100vw";
-        root.style.height = "100vh";
-        root.style.zIndex = String(FULLSCREEN_Z);
-        root.style.pointerEvents = "auto";
-        root.style.isolation = "isolate";
-        // Helps ensure the overlay (and its UI) stays in a top composited layer on mobile browsers.
-        root.style.transform = "translateZ(0)";
-        // Avoid any chance of "click-through" in certain browsers with fully transparent overlays.
-        root.style.background = "rgba(0,0,0,0.001)";
-        document.body.appendChild(root);
-        setTimeout(() => setOverlayTarget(root), 0);
+    if (!isFullscreen) return;
+
+    const html = document.documentElement;
+    const body = document.body;
+
+    if (!scrollRestoreRef.current) {
+      scrollRestoreRef.current = {
+        htmlOverflow: html.style.overflow,
+        bodyOverflow: body.style.overflow,
+        bodyPaddingRight: body.style.paddingRight,
+      };
+    }
+
+    const scrollbarWidth = window.innerWidth - html.clientWidth;
+    html.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+    if (scrollbarWidth > 0) {
+      body.style.paddingRight = `${scrollbarWidth}px`;
+    }
+
+    return () => {
+      const restore = scrollRestoreRef.current;
+      if (restore) {
+        html.style.overflow = restore.htmlOverflow;
+        body.style.overflow = restore.bodyOverflow;
+        body.style.paddingRight = restore.bodyPaddingRight;
+        scrollRestoreRef.current = null;
+      } else {
+        html.style.overflow = "";
+        body.style.overflow = "";
+        body.style.paddingRight = "";
       }
-    } else {
-      document.documentElement.style.overflow = "";
-      document.body.style.overflow = "";
+
       // Cleanup TradingView widget
       if (tvWidgetRef.current) {
         try {
@@ -515,14 +524,9 @@ export default function PriceChart({
       if (tvContainerRef.current) {
         tvContainerRef.current.innerHTML = "";
       }
-      if (overlayTarget) {
-        try {
-          document.body.removeChild(overlayTarget);
-        } catch {}
-        setTimeout(() => setOverlayTarget(null), 0);
-      }
-    }
-  }, [isFullscreen, overlayTarget]);
+      overlayRef.current = null;
+    };
+  }, [isFullscreen]);
 
   function loadTvJs(): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -597,15 +601,15 @@ export default function PriceChart({
 
       // Some third-party widgets inject their own fixed layers into <body>. Re-append our overlay
       // root to keep it last in DOM order so our UI stays on top when z-index ties happen.
-      if (overlayTarget && overlayTarget.parentNode === document.body) {
-        document.body.appendChild(overlayTarget);
+      if (overlayRef.current && overlayRef.current.parentNode === document.body) {
+        document.body.appendChild(overlayRef.current);
       }
     };
     init();
     return () => {
       cancelled = true;
     };
-  }, [isFullscreen, symbol, overlayTarget]);
+  }, [isFullscreen, symbol]);
 
   if (error) {
     return (
@@ -657,21 +661,21 @@ export default function PriceChart({
   );
 
   const fullscreenOverlay =
-    isFullscreen && overlayTarget
+    isFullscreen && typeof document !== "undefined"
       ? createPortal(
           <div
-            className="flex flex-col"
+            ref={overlayRef}
+            id="tv-fullscreen-overlay-root"
+            className="fixed inset-0 flex flex-col overflow-hidden pointer-events-auto"
             style={{
-              position: "fixed",
-              inset: 0,
-              width: "100vw",
-              height: "100vh",
               zIndex: FULLSCREEN_Z,
-              background: "transparent",
+              isolation: "isolate",
+              transform: "translateZ(0)",
+              background: "rgba(0,0,0,0.001)",
             }}
           >
             {/* TradingView chart */}
-            <div className="relative flex-1 min-h-0">
+            <div className="relative flex-1 min-h-0 overflow-hidden">
               <div
                 id="tv-advanced-chart"
                 ref={(el) => {
@@ -727,7 +731,7 @@ export default function PriceChart({
               <OrderForm symbol={symbol} latestPrice={latestPrice} />
             </div>
           </div>,
-          overlayTarget
+          document.body
         )
       : null;
 

@@ -75,6 +75,7 @@ export default function TopNav({
       <div
         className={cn(
           "fixed inset-0 z-50 transition-opacity duration-200",
+          "overflow-hidden",
           menuOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
         )}
         aria-hidden={!menuOpen}
