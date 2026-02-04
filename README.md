@@ -1,7 +1,7 @@
 # Cryptex
 A modern, responsive crypto trading platform with real-time charts, live pricing, portfolio tracking, and secure authentication. Features an intuitive trading interface, advanced charting, and a clean, professional design.
 <br>
-The site is live at https://cryptex-inky.vercel.app/trade
+The site is live at https://cryptex-inky.vercel.app/
 
 ## Project Screenshots
 
