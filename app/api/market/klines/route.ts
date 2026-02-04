@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
+import { buildMarketResponseHeaders, fetchMarketJson } from "@/lib/market";
 
-const BINANCE_BASE = "https://api.binance.com";
-const NO_STORE = "no-store, no-cache, must-revalidate";
+export const runtime = "nodejs";
+
+const CACHE_SECONDS = 30;
+const CACHE_CONTROL = "public, s-maxage=30, stale-while-revalidate=60";
 const ALLOWED_SYMBOLS = new Set(["BTCUSDT", "ETHUSDT", "SOLUSDT"]);
 const ALLOWED_INTERVALS = new Set(["1m", "5m", "15m", "30m", "1h", "4h", "1d"]);
-const FETCH_TIMEOUT_MS = 5000;
 
 type BinanceKline = [
   number,
@@ -67,52 +69,37 @@ export async function GET(req: Request) {
     ? Math.min(Math.max(limitParam, 50), 1000)
     : 200;
 
-  const url = new URL("/api/v3/klines", BINANCE_BASE);
-  url.searchParams.set("symbol", symbol);
-  url.searchParams.set("interval", interval);
-  url.searchParams.set("limit", String(limit));
+  const { data, sourceBaseUrl } = await fetchMarketJson<BinanceKline[]>(
+    "/api/v3/klines",
+    { symbol, interval, limit: String(limit) },
+    { cacheSeconds: CACHE_SECONDS }
+  );
 
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-    const response = await fetch(url.toString(), {
-      cache: "no-store",
-      signal: controller.signal,
-    }).finally(() => clearTimeout(timeoutId));
-
-    if (!response.ok) {
-      return NextResponse.json(
-        { error: "Market data unavailable." },
-        { status: 502 }
-      );
-    }
-
-    const data: BinanceKline[] = await response.json();
-
-    return NextResponse.json(
-      {
-        symbol,
-        interval,
-        candles: data.map((row) => ({
-          openTime: row[0],
-          open: Number(row[1]),
-          high: Number(row[2]),
-          low: Number(row[3]),
-          close: Number(row[4]),
-          volume: Number(row[5]),
-        })),
-      },
-      {
-        headers: {
-          "Cache-Control": NO_STORE,
-        },
-      }
-    );
-  } catch (error) {
-    console.error("Binance klines error", error);
+  if (!data) {
     return NextResponse.json(
       { error: "Market data unavailable." },
-      { status: 502 }
+      {
+        status: 502,
+        headers: buildMarketResponseHeaders(CACHE_CONTROL, sourceBaseUrl),
+      }
     );
   }
+
+  return NextResponse.json(
+    {
+      symbol,
+      interval,
+      candles: data.map((row) => ({
+        openTime: row[0],
+        open: Number(row[1]),
+        high: Number(row[2]),
+        low: Number(row[3]),
+        close: Number(row[4]),
+        volume: Number(row[5]),
+      })),
+    },
+    {
+      headers: buildMarketResponseHeaders(CACHE_CONTROL, sourceBaseUrl),
+    }
+  );
 }

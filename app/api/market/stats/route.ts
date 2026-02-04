@@ -1,9 +1,11 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { buildMarketResponseHeaders, fetchMarketJson } from "@/lib/market";
 
-const BINANCE_BASE = "https://api.binance.com";
+export const runtime = "nodejs";
+
+const CACHE_SECONDS = 15;
 const CACHE_CONTROL = "public, s-maxage=15, stale-while-revalidate=30";
 const ALLOWED_SYMBOLS = new Set(["BTCUSDT", "ETHUSDT", "SOLUSDT"]);
-const FETCH_TIMEOUT_MS = 5000;
 
 type BinanceStats = {
   symbol: string;
@@ -23,45 +25,32 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unsupported symbol." }, { status: 400 });
   }
 
-  const url = new URL("/api/v3/ticker/24hr", BINANCE_BASE);
-  url.searchParams.set("symbol", symbol);
+  const { data, sourceBaseUrl } = await fetchMarketJson<BinanceStats>(
+    "/api/v3/ticker/24hr",
+    { symbol },
+    { cacheSeconds: CACHE_SECONDS }
+  );
 
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-    const response = await fetch(url.toString(), {
-      next: { revalidate: 15 },
-      signal: controller.signal,
-    }).finally(() => clearTimeout(timeoutId));
-
-    if (!response.ok) {
-      return NextResponse.json(
-        { error: "Market data unavailable." },
-        { status: 502 }
-      );
-    }
-
-    const data: BinanceStats = await response.json();
-
-    return NextResponse.json(
-      {
-        symbol: data.symbol,
-        lastPrice: Number(data.lastPrice),
-        priceChangePercent: Number(data.priceChangePercent),
-        highPrice: Number(data.highPrice),
-        lowPrice: Number(data.lowPrice),
-      },
-      {
-        headers: {
-          "Cache-Control": CACHE_CONTROL,
-        },
-      }
-    );
-  } catch (error) {
-    console.error("Binance stats error", error);
+  if (!data) {
     return NextResponse.json(
       { error: "Market data unavailable." },
-      { status: 502 }
+      {
+        status: 502,
+        headers: buildMarketResponseHeaders(CACHE_CONTROL, sourceBaseUrl),
+      }
     );
   }
+
+  return NextResponse.json(
+    {
+      symbol: data.symbol,
+      lastPrice: Number(data.lastPrice),
+      priceChangePercent: Number(data.priceChangePercent),
+      highPrice: Number(data.highPrice),
+      lowPrice: Number(data.lowPrice),
+    },
+    {
+      headers: buildMarketResponseHeaders(CACHE_CONTROL, sourceBaseUrl),
+    }
+  );
 }

@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
-import { fetchLatestPrice } from "@/lib/market";
+import {
+  buildMarketResponseHeaders,
+  fetchLatestPriceWithSource,
+} from "@/lib/market";
 
-const NO_STORE = "no-store, no-cache, must-revalidate";
+export const runtime = "nodejs";
+
+const CACHE_CONTROL = "public, s-maxage=10, stale-while-revalidate=20";
+const CACHE_SECONDS = 10;
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -10,12 +16,17 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Missing symbol." }, { status: 400 });
   }
 
-  const price = await fetchLatestPrice(symbol);
+  const { price, sourceBaseUrl } = await fetchLatestPriceWithSource(symbol, {
+    cacheSeconds: CACHE_SECONDS,
+  });
 
   if (price === null) {
     return NextResponse.json(
       { error: "Market data unavailable." },
-      { status: 502 }
+      {
+        status: 502,
+        headers: buildMarketResponseHeaders(CACHE_CONTROL, sourceBaseUrl),
+      }
     );
   }
 
@@ -26,9 +37,7 @@ export async function GET(req: Request) {
       delayedMinutes: 15,
     },
     {
-      headers: {
-        "Cache-Control": NO_STORE,
-      },
+      headers: buildMarketResponseHeaders(CACHE_CONTROL, sourceBaseUrl),
     }
   );
 }
